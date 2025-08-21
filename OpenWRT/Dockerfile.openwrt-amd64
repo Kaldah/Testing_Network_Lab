@@ -1,0 +1,43 @@
+# ---- Stage 1: fetch & unpack OpenWrt rootfs ----
+FROM alpine:3.20 AS fetch
+ARG OWRT_VER=24.10.2
+ARG TARGET_DIR=releases/${OWRT_VER}/targets/x86/64
+ARG ROOTFS=openwrt-${OWRT_VER}-x86-64-rootfs.tar.gz
+RUN apk add --no-cache wget tar
+RUN mkdir -p /rootfs && \
+    wget -O /tmp/rootfs.tar.gz \
+      https://downloads.openwrt.org/${TARGET_DIR}/${ROOTFS} && \
+    tar -xzf /tmp/rootfs.tar.gz -C /rootfs
+
+# ---- Stage 2: actual image ----
+FROM scratch
+# Copy the unpacked OpenWrt filesystem (includes /bin/sh)
+COPY --from=fetch /rootfs/ /
+
+# Bootstrap opkg and install Python.
+# Use HTTP once to get CA certs, then switch back to HTTPS.
+RUN mkdir -p /var/lock && \
+    sed -i 's/https:/http:/g' /etc/opkg/distfeeds.conf && \
+    opkg update && \
+    opkg install ca-bundle ca-certificates && \
+    sed -i 's/http:/https:/g' /etc/opkg/distfeeds.conf && \
+    opkg update && \
+    opkg install python3 python3-pip curl && \
+    # Network utilities for OpenWrt
+    opkg install tcpdump nmap netcat socat wget \
+    iptables-mod-extra ip-full bridge-utils \
+    ethtool traceroute mtr bind-dig bind-nslookup \
+    openssh-client dropbear-scp wireless-tools \
+    hostapd wpa-supplicant iw iwinfo \
+  # optional extras (don't fail the build if a feed is missing)
+  opkg install coreutils findutils coreutils-timeout || true && \
+  opkg install hping3 arping fping ngrep || true && \
+  opkg install aircrack-ng kismet-client || true
+
+# Add entrypoint script
+COPY entrypoint.sh /usr/local/bin/openwrt-entrypoint.sh
+RUN chmod +x /usr/local/bin/openwrt-entrypoint.sh
+
+WORKDIR /work
+ENTRYPOINT ["/usr/local/bin/openwrt-entrypoint.sh"]
+CMD ["/bin/sh"]

@@ -1,0 +1,93 @@
+name: sip-lab
+
+x-shared: &shared_mount
+  - ./shared:/app/shared:rw   # add :z on SELinux hosts => ./shared:/app/shared:rw,z
+
+networks:
+  sip_lab_net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: sipbr0
+    ipam:
+      config:
+        - subnet: 10.10.0.0/24
+
+services:
+  attacker:
+    build:
+      context: ./Linux
+      dockerfile: Dockerfile
+      args:
+        - PYTHON_TAG=3.13-slim
+    container_name: sip-attacker
+    hostname: attacker
+    init: true
+    tty: true
+    stdin_open: true
+    networks:
+      sip_lab_net:
+        ipv4_address: 10.10.0.2
+    working_dir: /app
+    volumes:
+      - ./shared:/app/shared:rw   # add :z on SELinux hosts => ./shared:/app/shared:rw,z
+      # Keep your StormShadow path too (so existing scripts still work)
+      - ./shared/StormShadow:/app/shared/StormShadow:rw
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    command: ["sleep", "infinity"]
+
+  sip_server:
+    build:
+      context: ./sip_server
+    container_name: asterisk-sip
+    hostname: sipserver
+    init: true
+    networks:
+      sip_lab_net:
+        ipv4_address: 10.10.0.3
+    volumes:
+      - ./shared:/app/shared:rw   # add :z on SELinux hosts => ./shared:/app/shared:rw,z
+      - ./sip_server/configs/pjsip.conf:/etc/asterisk/pjsip.conf:ro
+      - ./sip_server/configs/extensions.conf:/etc/asterisk/extensions.conf:ro
+    # ports:
+    #   - "5060:5060/udp"
+    #   - "5060:5060/tcp"
+
+  openwrt:
+    build:
+      context: ./OpenWRT
+      dockerfile: Dockerfile.openwrt-amd64
+      args:
+        - OWRT_VER=24.10.2
+    container_name: openwrt-router
+    hostname: openwrt
+    init: true
+    tty: true
+    stdin_open: true
+    networks:
+      sip_lab_net:
+        ipv4_address: 10.10.0.4
+    working_dir: /work
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      *shared_mount
+    command: ["/bin/sh", "-c", "while true; do sleep 30; done"]
+
+  # defender:
+  #   build:
+  #     context: ./defender
+  #   container_name: sip-defender
+  #   hostname: defender
+  #   init: true
+  #   networks:
+  #     sip_lab_net:
+  #       ipv4_address: 10.10.0.5
+  #   cap_add:
+  #     - NET_ADMIN
+  #     - NET_RAW
+  #   volumes:
+  #     *shared_mount
+  #   command: ["sleep", "infinity"]

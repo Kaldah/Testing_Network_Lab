@@ -1,0 +1,13 @@
+# Reduce build context
+.git
+**/__pycache__/
+**/*.pyc
+**/.venv
+**/venv
+**/.mypy_cache
+**/.ruff_cache
+**/.pytest_cache
+**/.DS_Store
+../shared/StormShadow/build
+../shared/StormShadow/dist
+../shared/StormShadow/.tox

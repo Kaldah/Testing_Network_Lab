@@ -1,0 +1,97 @@
+# StormShadow SIP-Only Configuration
+# Main configuration file for the simplified SIP-only version
+# Global configuration can be partially overridden by attack-specific configurations
+# Note: The auto-detection is made to avoid conflict with your current network setup
+# Report any issues to the development team
+
+app:
+  platform: "linux"
+  project_name: "StormShadow"
+  version: "0.2.0"
+  description: "StormShadow for Spoofed SIP Attacks"
+  # Enable or disable features globally
+
+  enabled:
+    # Allow to run the application in dry run mode, nothing will happen
+    # but the application will run and display what it would do
+    dry_run: false  # Disable dry run mode by default
+    # Activate attack features
+    attack: true  # Enable attack mode by default
+    custom_payload: false  # Allow the use of a custom payload for some attacks
+    spoofing: true  # Enable spoofing by default
+
+    # Activate lab features
+    lab: false  # Enable lab mode by default
+    defense: true  # Enable defense mode by default
+    return_path: true  # Enable return path
+
+    # Other features
+    metrics: true  # Enable metrics collection by default
+    log_file: false  # Enable logging to a file
+    gui: false  # Enable GUI
+    open_window: false # Terminal window will be opened for the attack, lab and spoofer by default
+
+log:
+  file: "logs/stormshadow_sip.log"  # Log file path
+  verbosity_level: "INFO"  # Default verbosity level
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"  # Log format
+
+gui:
+  theme: "dark"  # Use dark theme by default
+  window_width: 1910 # Make auto-detection of the window size
+  window_height: 1009 # Make auto-detection of the window size
+
+# Network configuration, modify this section in case the automatic detection does not work
+network:
+  # Network interface to use by default
+  interface: "auto" # Automatically determine the interface from the network configuration
+  own_ip: "auto"  # Automatically determine the own IP address from the network configuration
+  first_queue_num: "auto"  # Automatically determine the queue number for ACK return
+  # SIP configuration
+  sip_port: 5060
+
+metrics:
+  ack_port: 4000
+  # Metrics collection interval in seconds
+  collection_interval: 5
+  # Attack configuration
+  ack_return_queue_num: "auto"  # Automatically determine the queue number for ACK return
+  open_window: "auto"  # Automatically determine if a new terminal window should be opened for the metrics collection
+# Attack configuration
+attack:
+  attack_name: "invite-flood"  # Type of attack to perform, can be "sip_invite", "sip_ack", etc.
+  target_ip: "auto"  # Automatically determine the target IP to use your own ip for local tests
+  interface: "auto" # Automatically determine the interface to use your own interface for local tests
+  target_port: "auto"  # Automatically determine the target port (use the sip port)
+  source_port: "auto"  # Automatically determine the source port (use the ack port)
+  attack_queue_num: "auto"  # Automatically determine the queue number for the attack
+
+  max_count: 10 # Number of SIP INVITE messages to send, put 0 for unlimited
+  delay: 0 # Delay between each invites put 0 for maximum speed
+  max_duration: 60  # Maximum duration of the attack in seconds put 0 for unlimited
+  rate : 100  # Rate of SIP INVITE messages per second
+  open_window: "auto"  # Open a new terminal window for the attack by default
+  sip_users :
+    - "200"
+    - "201"
+    - "202"
+
+  spoofing_subnet: "10.10.122.0/25"
+  user_agent: "StormShadow"  # Custom user-agent
+  # Path to custom payload, if needed put a "payload.sip" file for full customization
+  custom_payload_path: "sip-attacks/custom_payloads/custom_payload_config.yaml"
+# Lab (victim) configuration
+lab:
+  interface: "auto" # Use "auto" to automatically determine the interface from the network configuration
+  server_ip: "auto" # Use "auto" to automatically determine the server IP from the used interface
+  docker_name: "stormshadow-sip-server"
+  open_window: "auto"  # Automatically determine if a new terminal window should be opened for the lab
+  # Return path configuration when the attack uses spoofing
+  return_path:
+    dnat_target_ip: "auto" # Automatically determine the target IP for DNAT (return to attacker)
+    dnat_port: "auto"  # Automatically determine the target port for DNAT  (return to attacker)
+    spoofed_subnet: "auto" # Automatically determine the spoofed subnet from the attack configuration
+
+
+# defense :
+#   defense_name: "sip_defense"  # Type of defense to perform, can be "sip_defense", "sip_return_path", etc.

@@ -1,0 +1,32 @@
+/* Custom tweaks for StormShadow docs */
+
+/* Improve code block appearance */
+div.highlight pre {
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+}
+
+/* Custom admonitions */
+.admonition.note, .admonition.tip {
+  border-left: 4px solid #0ea5a6;
+}
+
+/* Tables */
+.docutils .wy-table-responsive table td, .docutils .wy-table-responsive table th {
+  white-space: normal !important;
+}
+
+/* Headings accent */
+:root {
+  --brand-accent: #0ea5a6;
+}
+
+h1, h2, h3 {
+  scroll-margin-top: 80px;
+}
+
+/* Copy button position */
+.copybtn {
+  top: 0.35rem;
+  right: 0.35rem;
+}
