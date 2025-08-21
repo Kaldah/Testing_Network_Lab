@@ -85,6 +85,55 @@ install_uv() {
   return 1
 }
 
+check_netfilterqueue_deps() {
+  # Check if required system packages for netfilterqueue compilation are available
+  local missing_deps=()
+  
+  if have_cmd pkg-config; then
+    if ! pkg-config --exists libnetfilter_queue 2>/dev/null; then
+      missing_deps+=("libnetfilter-queue-dev")
+    fi
+    if ! pkg-config --exists libnfnetlink 2>/dev/null; then
+      missing_deps+=("libnfnetlink-dev")
+    fi
+  else
+    # Check for header files directly
+    if [[ ! -f /usr/include/libnetfilter_queue/libnetfilter_queue.h ]]; then
+      missing_deps+=("libnetfilter-queue-dev")
+    fi
+    if [[ ! -f /usr/include/libnfnetlink/libnfnetlink.h ]]; then
+      missing_deps+=("libnfnetlink-dev")
+    fi
+  fi
+  
+  # Check for kernel headers
+  if [[ ! -d /usr/include/linux ]]; then
+    missing_deps+=("linux-libc-dev or linux-headers")
+  fi
+  
+  if [[ ${#missing_deps[@]} -gt 0 ]]; then
+    log_warn "Missing system dependencies for netfilterqueue compilation:"
+    for dep in "${missing_deps[@]}"; do
+      log_warn "  - $dep"
+    done
+    
+    if have_cmd apt-get; then
+      log_info "To install on Debian/Ubuntu, run:"
+      echo "  sudo apt-get update"
+      echo "  sudo apt-get install -y build-essential libnetfilter-queue-dev libnfnetlink-dev linux-libc-dev"
+    elif have_cmd dnf; then
+      log_info "To install on Fedora/RHEL, run:"
+      echo "  sudo dnf install -y gcc make libnetfilter_queue-devel libnfnetlink-devel kernel-headers"
+    elif have_cmd pacman; then
+      log_info "To install on Arch Linux, run:"
+      echo "  sudo pacman -S base-devel libnetfilter_queue libnfnetlink linux-headers"
+    fi
+    
+    return 1
+  fi
+  return 0
+}
+
 print_usage_warning() {
   echo ""
   echo "=============================================================="
@@ -104,6 +153,24 @@ install_python_deps() {
   local force_no_uv="${FORCE_NO_UV:-0}"
   local force_use_uv="${FORCE_USE_UV:-0}"
 
+  # Check if netfilterqueue dependencies are available
+  local can_compile_netfilterqueue=1
+  if ! check_netfilterqueue_deps; then
+    can_compile_netfilterqueue=0
+    log_warn "netfilterqueue compilation will likely fail due to missing system dependencies"
+    
+    if [[ -t 0 ]]; then  # Interactive terminal
+      if prompt_yes_no "Continue anyway? Some features may not work. [y/N] " "default_no"; then
+        log_info "Continuing with installation (netfilterqueue will be skipped on failure)"
+      else
+        log_error "Installation cancelled. Please install the required system packages first."
+        return 1
+      fi
+    else
+      log_info "Non-interactive mode: continuing with installation (netfilterqueue will be skipped on failure)"
+    fi
+  fi
+
   # Default: quick path with pip+venv; only use uv when explicitly requested
   if [[ "$force_use_uv" == "1" ]]; then
     # try to install uv if missing
@@ -119,7 +186,12 @@ install_python_deps() {
     if [[ -f "$PYPROJECT_FILE" ]]; then
       uv sync
     elif [[ -f "$REQUIREMENTS_FILE" ]]; then
-      uv pip install -r "$REQUIREMENTS_FILE"
+      if [[ $can_compile_netfilterqueue -eq 0 ]]; then
+        # Install packages one by one, skipping netfilterqueue if it fails
+        install_requirements_separately_uv
+      else
+        uv pip install -r "$REQUIREMENTS_FILE"
+      fi
     else
       log_warn "No pyproject.toml or requirements.txt found; skipping Python deps"
     fi
@@ -146,13 +218,84 @@ install_python_deps() {
       source "$ROOT_DIR/.venv/bin/activate"
       python3 -m pip install --upgrade pip
       if [[ -f "$REQUIREMENTS_FILE" ]]; then
-        python3 -m pip install -r "$REQUIREMENTS_FILE"
+        if [[ $can_compile_netfilterqueue -eq 0 ]]; then
+          # Install packages one by one, skipping netfilterqueue if it fails
+          install_requirements_separately_pip
+        else
+          python3 -m pip install -r "$REQUIREMENTS_FILE"
+        fi
       elif [[ -f "$PYPROJECT_FILE" ]]; then
         log_warn "pyproject.toml found, but this is not a buildable Python project. Skipping pip install .; using requirements.txt only."
       fi
     else
       log_warn "No dependency manifest found; skipping Python deps"
     fi
+  fi
+}
+
+install_requirements_separately_pip() {
+  # Install each package individually, continuing on failures
+  local failed_packages=()
+  
+  while IFS= read -r line; do
+    # Skip empty lines and comments
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    
+    local package_spec="$line"
+    local package_name="${line%%[><=!]*}"  # Extract package name before version specifiers
+    
+    log_info "Installing: $package_spec"
+    if python3 -m pip install "$package_spec"; then
+      log_info "✓ Successfully installed: $package_name"
+    else
+      log_warn "✗ Failed to install: $package_name"
+      failed_packages+=("$package_name")
+      
+      # Special handling for netfilterqueue
+      if [[ "$package_name" =~ netfilterqueue ]]; then
+        log_warn "netfilterqueue failed to install - IP spoofing features will not be available"
+        log_warn "This is expected if system dependencies are missing"
+      fi
+    fi
+  done < "$REQUIREMENTS_FILE"
+  
+  if [[ ${#failed_packages[@]} -gt 0 ]]; then
+    log_warn "The following packages failed to install:"
+    printf '  - %s\n' "${failed_packages[@]}"
+    log_warn "Some features may not work. Consider installing missing system dependencies."
+  fi
+}
+
+install_requirements_separately_uv() {
+  # Install each package individually with uv, continuing on failures
+  local failed_packages=()
+  
+  while IFS= read -r line; do
+    # Skip empty lines and comments
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    
+    local package_spec="$line"
+    local package_name="${line%%[><=!]*}"  # Extract package name before version specifiers
+    
+    log_info "Installing with uv: $package_spec"
+    if uv pip install "$package_spec"; then
+      log_info "✓ Successfully installed: $package_name"
+    else
+      log_warn "✗ Failed to install: $package_name"
+      failed_packages+=("$package_name")
+      
+      # Special handling for netfilterqueue
+      if [[ "$package_name" =~ netfilterqueue ]]; then
+        log_warn "netfilterqueue failed to install - IP spoofing features will not be available"
+        log_warn "This is expected if system dependencies are missing"
+      fi
+    fi
+  done < "$REQUIREMENTS_FILE"
+  
+  if [[ ${#failed_packages[@]} -gt 0 ]]; then
+    log_warn "The following packages failed to install:"
+    printf '  - %s\n' "${failed_packages[@]}"
+    log_warn "Some features may not work. Consider installing missing system dependencies."
   fi
 }
 

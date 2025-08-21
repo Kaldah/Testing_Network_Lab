@@ -65,9 +65,105 @@ def have_cmd(name: str) -> bool:
     return shutil.which(name) is not None
 
 
+def check_netfilterqueue_deps() -> bool:
+    """Check if system dependencies for netfilterqueue compilation are available."""
+    import shutil
+    
+    missing_deps: List[str] = []
+    
+    # Check for pkg-config and required libraries
+    if shutil.which("pkg-config"):
+        try:
+            subprocess.run(["pkg-config", "--exists", "libnetfilter_queue"], check=True, capture_output=True)
+        except subprocess.CalledProcessError:
+            missing_deps.append("libnetfilter-queue-dev")
+            
+        try:
+            subprocess.run(["pkg-config", "--exists", "libnfnetlink"], check=True, capture_output=True)
+        except subprocess.CalledProcessError:
+            missing_deps.append("libnfnetlink-dev")
+    else:
+        # Check for header files directly
+        if not Path("/usr/include/libnetfilter_queue/libnetfilter_queue.h").exists():
+            missing_deps.append("libnetfilter-queue-dev")
+        if not Path("/usr/include/libnfnetlink/libnfnetlink.h").exists():
+            missing_deps.append("libnfnetlink-dev")
+    
+    # Check for kernel headers
+    if not Path("/usr/include/linux").exists():
+        missing_deps.append("linux-libc-dev or linux-headers")
+    
+    if missing_deps:
+        log("warn", "Missing system dependencies for netfilterqueue compilation:")
+        for dep in missing_deps:
+            log("warn", f"  - {dep}")
+        
+        if shutil.which("apt-get"):
+            log("info", "To install on Debian/Ubuntu, run:")
+            print("  sudo apt-get update")
+            print("  sudo apt-get install -y build-essential libnetfilter-queue-dev libnfnetlink-dev linux-libc-dev")
+        elif shutil.which("dnf"):
+            log("info", "To install on Fedora/RHEL, run:")
+            print("  sudo dnf install -y gcc make libnetfilter_queue-devel libnfnetlink-devel kernel-headers")
+        elif shutil.which("pacman"):
+            log("info", "To install on Arch Linux, run:")
+            print("  sudo pacman -S base-devel libnetfilter_queue libnfnetlink linux-headers")
+        
+        return False
+    return True
+
+
+def install_requirements_separately(venv_python: Path, req_file: Path) -> None:
+    """Install each package individually, continuing on failures."""
+    failed_packages: List[str] = []
+    
+    with open(req_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            # Skip empty lines and comments
+            if not line or line.startswith('#'):
+                continue
+            
+            package_spec = line
+            package_name = line.split('>=')[0].split('==')[0].split('>')[0].split('<')[0].split('!')[0]
+            
+            log("info", f"Installing: {package_spec}")
+            try:
+                run([str(venv_python), "-m", "pip", "install", package_spec])
+                log("info", f"✓ Successfully installed: {package_name}")
+            except subprocess.CalledProcessError:
+                log("warn", f"✗ Failed to install: {package_name}")
+                failed_packages.append(package_name)
+                
+                # Special handling for netfilterqueue
+                if "netfilterqueue" in package_name:
+                    log("warn", "netfilterqueue failed to install - IP spoofing features will not be available")
+                    log("warn", "This is expected if system dependencies are missing")
+    
+    if failed_packages:
+        log("warn", "The following packages failed to install:")
+        for pkg in failed_packages:
+            log("warn", f"  - {pkg}")
+        log("warn", "Some features may not work. Consider installing missing system dependencies.")
+
+
 def install_python_deps(force_no_uv: bool = False, force_use_uv: bool = False) -> None:
     req = ROOT / "requirements.txt"
     pyproject = ROOT / "pyproject.toml"
+
+    # Check if netfilterqueue dependencies are available
+    can_compile_netfilterqueue = check_netfilterqueue_deps()
+    if not can_compile_netfilterqueue:
+        log("warn", "netfilterqueue compilation will likely fail due to missing system dependencies")
+        
+        # In non-interactive environments, continue anyway
+        if sys.stdin.isatty():
+            response = input("Continue anyway? Some features may not work. [y/N] ").strip().lower()
+            if response not in ['y', 'yes']:
+                log("error", "Installation cancelled. Please install the required system packages first.")
+                return
+        else:
+            log("info", "Non-interactive mode: continuing with installation (netfilterqueue will be skipped on failure)")
 
     def try_install_uv() -> bool:
         # Prefer pipx if available, else use official installer, else pip --user
@@ -132,7 +228,11 @@ def install_python_deps(force_no_uv: bool = False, force_use_uv: bool = False) -
             
         # Install dependencies in venv
         run([str(python_bin), "-m", "pip", "install", "--upgrade", "pip"])
-        run([str(pip_bin), "install", "-r", str(req)])
+        if can_compile_netfilterqueue:
+            run([str(pip_bin), "install", "-r", str(req)])
+        else:
+            # Install packages one by one, skipping failures
+            install_requirements_separately(python_bin, req)
     elif pyproject.exists():
         log("warn", "pyproject.toml found, but this is not a buildable Python project. Skipping pip install .; using requirements.txt only.")
     else:

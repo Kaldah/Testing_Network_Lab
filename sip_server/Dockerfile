@@ -14,7 +14,7 @@ RUN apk update && \
 		sshpass cifs-utils nfs-utils dnsutils whois macchanger || true
 
 # Copy entrypoint (configs are bind-mounted via docker-compose)
-COPY entrypoint.sh /entrypoint.sh
+COPY sip_server/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Expose SIP ports (internal only unless mapped)

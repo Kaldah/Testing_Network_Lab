@@ -1,0 +1,14 @@
+# Ignore compiled binaries
+*/inviteflood
+*/stormshadow
+*/sipflood
+*/sip*
+
+# Keep directory structure
+!.gitignore
+!README.md
+!build-tools.sh
+!demo.sh
+
+# Keep directories but not their binary contents
+!*/

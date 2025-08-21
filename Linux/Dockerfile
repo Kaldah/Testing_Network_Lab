@@ -8,10 +8,12 @@ FROM python:${PYTHON_TAG} AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Build deps for C extensions + headers for NetfilterQueue, Scapy extras
+# Include python3-dev so extension modules can find Python headers when building wheels
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential gcc make pkg-config git ca-certificates curl \
-    libnetfilter-queue-dev libnfnetlink-dev libmnl-dev \
-    libpcap-dev libnet1-dev \
+  build-essential gcc make pkg-config git ca-certificates curl \
+  python3-dev linux-libc-dev \
+  libnetfilter-queue-dev libnfnetlink-dev libmnl-dev \
+  libpcap-dev libnet1-dev \
  && rm -rf /var/lib/apt/lists/*
 
 # Isolated venv to keep the final image small/clean
@@ -36,12 +38,16 @@ RUN printf '%s\n' \
  && pip install --no-cache-dir -r /tmp/requirements.txt
 
 ############################################
-# 2) Kali stage: fetch inviteflood
+# 2) Build tools: compile inviteflood
 ############################################
-FROM kalilinux/kali-rolling AS kalibuilder
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends inviteflood \
- && rm -rf /var/lib/apt/lists/*
+FROM builder AS toolbuilder
+
+# Copy tools source code for compilation
+COPY shared/tools /tmp/tools
+
+# Compile inviteflood for Linux
+RUN cd /tmp/tools/inviteflood/inviteflood && \
+    make clean && make
 
 ############################################
 # 3) Final runtime: minimal
@@ -60,9 +66,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   iptables iproute2 tcpdump \
   libnetfilter-queue1 libnfnetlink0 libmnl0 libpcap0.8 libnet1 \
   build-essential gcc make pkg-config \
+  libnetfilter-queue-dev libnfnetlink-dev libmnl-dev linux-libc-dev \
+  libpcap-dev libnet1-dev python3-dev \
   curl wget net-tools iputils-ping netcat-traditional nmap \
   openssh-client socat \
-  python3 python3-dev python3-pip python3-tk python3-venv \
+  python3 python3-pip python3-tk python3-venv \
  && rm -rf /var/lib/apt/lists/*
 
 # Bring venv + inviteflood
@@ -73,13 +81,13 @@ RUN ln -sf /usr/bin/python3 $VENV/bin/python && \
     ln -sf /usr/bin/python3 $VENV/bin/python3 && \
     ln -sf /usr/bin/python3 $VENV/bin/python3.13
 ENV PATH="$VENV/bin:${PATH}"
-COPY --from=kalibuilder /usr/bin/inviteflood /usr/local/bin/inviteflood
+COPY --from=toolbuilder /tmp/tools/inviteflood/inviteflood/inviteflood /usr/local/bin/inviteflood
 
 # Mount your project at /app when running
 WORKDIR /app
 
 # Provide a simple entrypoint to isolate iptables rules and print tips
-COPY entrypoint.sh /usr/local/bin/attacker-entrypoint.sh
+COPY Linux/entrypoint.sh /usr/local/bin/attacker-entrypoint.sh
 RUN chmod +x /usr/local/bin/attacker-entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/attacker-entrypoint.sh"]

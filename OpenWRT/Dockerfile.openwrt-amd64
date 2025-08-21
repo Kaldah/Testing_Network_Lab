@@ -23,6 +23,15 @@ RUN mkdir -p /var/lock && \
     sed -i 's/http:/https:/g' /etc/opkg/distfeeds.conf && \
     opkg update && \
     opkg install python3 python3-pip curl && \
+    # Development tools for compiling
+    opkg install gcc libc-dev make && \
+    # Try to install libnet development libraries (package names vary in OpenWRT)
+    opkg install libnet1 libnet1-dev || \
+    opkg install libnet libnet-dev || \
+    opkg install libdnet libdnet-dev || \
+    echo "libnet not found in packages - will compile without" && \
+    # Install other useful libraries
+    opkg install libpcap-dev || opkg install libpcap1 || true && \
     # Network utilities for OpenWrt
     opkg install tcpdump nmap netcat socat wget \
     iptables-mod-extra ip-full bridge-utils \
@@ -34,10 +43,27 @@ RUN mkdir -p /var/lock && \
   opkg install hping3 arping fping ngrep || true && \
   opkg install aircrack-ng kismet-client || true
 
+# Copy tools source code for compilation
+COPY --chmod=755 shared/tools /tmp/tools
+
+# Compile inviteflood for OpenWRT (gracefully handle missing dependencies)
+RUN cd /tmp/tools/inviteflood/inviteflood && \
+    make clean && \
+    if make 2>/dev/null; then \
+        mkdir -p /usr/local/bin && \
+        cp inviteflood /usr/local/bin/ && \
+        chmod +x /usr/local/bin/inviteflood && \
+        echo "✅ inviteflood compiled successfully for OpenWRT"; \
+    else \
+        echo "⚠️  inviteflood compilation failed in container build"; \
+        echo "   You can compile it at runtime using: /shared/compiled-binaries/build-tools.sh"; \
+        mkdir -p /usr/local/bin; \
+    fi
+
 # Add entrypoint script
-COPY entrypoint.sh /usr/local/bin/openwrt-entrypoint.sh
+COPY OpenWRT/entrypoint.sh /usr/local/bin/openwrt-entrypoint.sh
 RUN chmod +x /usr/local/bin/openwrt-entrypoint.sh
 
-WORKDIR /work
+WORKDIR /shared
 ENTRYPOINT ["/usr/local/bin/openwrt-entrypoint.sh"]
 CMD ["/bin/sh"]

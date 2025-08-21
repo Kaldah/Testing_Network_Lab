@@ -15,8 +15,8 @@ networks:
 services:
   attacker:
     build:
-      context: ./Linux
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./Linux/Dockerfile
       args:
         - PYTHON_TAG=3.13-slim
     container_name: sip-attacker
@@ -30,8 +30,7 @@ services:
     working_dir: /app
     volumes:
       - ./shared:/app/shared:rw   # add :z on SELinux hosts => ./shared:/app/shared:rw,z
-      # Keep your StormShadow path too (so existing scripts still work)
-      - ./shared/StormShadow:/app/shared/StormShadow:rw
+      - ./shared/compiled-binaries/linux-x86_64:/usr/local/bin/compiled:rw
     cap_add:
       - NET_ADMIN
       - NET_RAW
@@ -39,7 +38,8 @@ services:
 
   sip_server:
     build:
-      context: ./sip_server
+      context: .
+      dockerfile: ./sip_server/Dockerfile
     container_name: asterisk-sip
     hostname: sipserver
     init: true
@@ -56,8 +56,8 @@ services:
 
   openwrt:
     build:
-      context: ./OpenWRT
-      dockerfile: Dockerfile.openwrt-amd64
+      context: .
+      dockerfile: ./OpenWRT/Dockerfile.openwrt-amd64
       args:
         - OWRT_VER=24.10.2
     container_name: openwrt-router
@@ -68,12 +68,13 @@ services:
     networks:
       sip_lab_net:
         ipv4_address: 10.10.0.4
-    working_dir: /work
+    working_dir: /shared
     cap_add:
       - NET_ADMIN
       - NET_RAW
     volumes:
-      *shared_mount
+      - ./shared:/shared:rw   # add :z on SELinux hosts => ./shared:/shared:rw,z
+      - ./shared/compiled-binaries/openwrt-x86_64:/usr/local/bin/compiled:rw
     command: ["/bin/sh", "-c", "while true; do sleep 30; done"]
 
   # defender:
