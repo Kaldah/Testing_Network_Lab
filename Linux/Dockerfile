@@ -38,19 +38,7 @@ RUN printf '%s\n' \
  && pip install --no-cache-dir -r /tmp/requirements.txt
 
 ############################################
-# 2) Build tools: compile inviteflood
-############################################
-FROM builder AS toolbuilder
-
-# Copy tools source code for compilation
-COPY shared/tools /tmp/tools
-
-# Compile inviteflood for Linux
-RUN cd /tmp/tools/inviteflood/inviteflood && \
-    make clean && make
-
-############################################
-# 3) Final runtime: minimal
+# 2) Final runtime: minimal
 ############################################
 FROM kalilinux/kali-rolling
 ENV DEBIAN_FRONTEND=noninteractive
@@ -73,7 +61,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   python3 python3-pip python3-tk python3-venv \
  && rm -rf /var/lib/apt/lists/*
 
-# Bring venv + inviteflood
+# Bring venv
 ENV VENV=/opt/venv
 COPY --from=builder $VENV $VENV
 # Fix venv symlinks to point to the correct python location
@@ -81,7 +69,6 @@ RUN ln -sf /usr/bin/python3 $VENV/bin/python && \
     ln -sf /usr/bin/python3 $VENV/bin/python3 && \
     ln -sf /usr/bin/python3 $VENV/bin/python3.13
 ENV PATH="$VENV/bin:${PATH}"
-COPY --from=toolbuilder /tmp/tools/inviteflood/inviteflood/inviteflood /usr/local/bin/inviteflood
 
 # Mount your project at /app when running
 WORKDIR /app

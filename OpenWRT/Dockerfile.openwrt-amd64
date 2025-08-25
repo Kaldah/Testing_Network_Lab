@@ -43,22 +43,6 @@ RUN mkdir -p /var/lock && \
   opkg install hping3 arping fping ngrep || true && \
   opkg install aircrack-ng kismet-client || true
 
-# Copy tools source code for compilation
-COPY --chmod=755 shared/tools /tmp/tools
-
-# Compile inviteflood for OpenWRT (gracefully handle missing dependencies)
-RUN cd /tmp/tools/inviteflood/inviteflood && \
-    make clean && \
-    if make 2>/dev/null; then \
-        mkdir -p /usr/local/bin && \
-        cp inviteflood /usr/local/bin/ && \
-        chmod +x /usr/local/bin/inviteflood && \
-        echo "✅ inviteflood compiled successfully for OpenWRT"; \
-    else \
-        echo "⚠️  inviteflood compilation failed in container build"; \
-        echo "   You can compile it at runtime using: /shared/compiled-binaries/build-tools.sh"; \
-        mkdir -p /usr/local/bin; \
-    fi
 
 # Add entrypoint script
 COPY OpenWRT/entrypoint.sh /usr/local/bin/openwrt-entrypoint.sh
