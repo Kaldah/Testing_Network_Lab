@@ -59,6 +59,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   curl wget net-tools iputils-ping netcat-traditional nmap \
   openssh-client socat \
   python3 python3-pip python3-tk python3-venv \
+  binutils file strace \
+  kmod linux-headers-amd64 \
  && rm -rf /var/lib/apt/lists/*
 
 # Bring venv
@@ -76,6 +78,12 @@ WORKDIR /app
 # Provide a simple entrypoint to isolate iptables rules and print tips
 COPY Linux/entrypoint.sh /usr/local/bin/attacker-entrypoint.sh
 RUN chmod +x /usr/local/bin/attacker-entrypoint.sh
+
+# Create symbolic link for inviteflood (will be available when volume is mounted)
+RUN mkdir -p /usr/local/bin/local-compiled
+
+# Add compiled binaries to PATH permanently
+ENV PATH="/usr/local/bin/local-compiled:/usr/local/bin:/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
 
 ENTRYPOINT ["/usr/local/bin/attacker-entrypoint.sh"]
 CMD ["/bin/bash"]

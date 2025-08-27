@@ -198,9 +198,9 @@ def install_python_deps(force_no_uv: bool = False, force_use_uv: bool = False) -
                 use_uv = False
 
     if use_uv:
-        log("info", "Installing Python deps with uv (creating .venv)")
+        log("info", "Installing Python deps with uv (creating .venv with system site packages)")
         # Ensure a project venv exists
-        run(["uv", "venv", str(ROOT / ".venv")])
+        run(["uv", "venv", "--system-site-packages", str(ROOT / ".venv")])
         if pyproject.exists():
             run(["uv", "sync"])  # uses uv.lock if present
         elif req.exists():
@@ -213,8 +213,8 @@ def install_python_deps(force_no_uv: bool = False, force_use_uv: bool = False) -
     if req.exists():
         venv = ROOT / ".venv"
         if not venv.exists():
-            log("info", f"Creating virtual environment at {venv}")
-            result = run([sys.executable, "-m", "venv", str(venv)], check=False)
+            log("info", f"Creating virtual environment at {venv} (with system site packages)")
+            result = run([sys.executable, "-m", "venv", "--system-site-packages", str(venv)], check=False)
             if result.returncode != 0:
                 log("error", "Failed to create virtual environment")
                 return

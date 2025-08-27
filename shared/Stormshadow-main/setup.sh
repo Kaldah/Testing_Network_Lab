@@ -180,9 +180,9 @@ install_python_deps() {
   fi
 
   if [[ "$force_use_uv" == "1" && "$(have_cmd uv && echo yes || echo no)" == "yes" ]]; then
-    log_info "Installing Python deps with uv (creating .venv)"
+    log_info "Installing Python deps with uv (creating .venv with system site packages)"
     # Ensure a project venv exists
-    uv venv "$ROOT_DIR/.venv"
+    uv venv --system-site-packages "$ROOT_DIR/.venv"
     if [[ -f "$PYPROJECT_FILE" ]]; then
       uv sync
     elif [[ -f "$REQUIREMENTS_FILE" ]]; then
@@ -200,8 +200,8 @@ install_python_deps() {
     if [[ -f "$REQUIREMENTS_FILE" || -f "$PYPROJECT_FILE" ]]; then
       # Create venv if it doesn't exist
       if [[ ! -d "$ROOT_DIR/.venv" ]]; then
-        log_info "Creating virtual environment at $ROOT_DIR/.venv"
-        python3 -m venv "$ROOT_DIR/.venv" || {
+        log_info "Creating virtual environment at $ROOT_DIR/.venv (with system site packages)"
+        python3 -m venv --system-site-packages "$ROOT_DIR/.venv" || {
           log_error "Failed to create virtual environment"
           return 1
         }

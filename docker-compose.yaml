@@ -24,6 +24,7 @@ services:
     init: true
     tty: true
     stdin_open: true
+    privileged: true  # Enable privileged mode for NFQUEUE access
     networks:
       sip_lab_net:
         ipv4_address: 10.10.0.2
@@ -31,9 +32,12 @@ services:
     volumes:
       - ./shared:/app/shared:rw   # add :z on SELinux hosts => ./shared:/app/shared:rw,z
       - ./shared/compiled-binaries/linux-x86_64:/usr/local/bin/compiled:rw
+      - /lib/modules:/lib/modules:ro  # Share host kernel modules
+      - /sys:/sys:ro  # Share host sysfs
     cap_add:
       - NET_ADMIN
       - NET_RAW
+      - SYS_MODULE  # Allow loading kernel modules
     command: ["sleep", "infinity"]
 
   sip_server:

